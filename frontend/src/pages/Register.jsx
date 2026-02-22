@@ -46,7 +46,7 @@ const Register = () => {
 
     setSendingOtp(true);
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetch('https://smart-sos-platform.onrender.com/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: form.phone })
@@ -94,7 +94,7 @@ const Register = () => {
 
     setVerifyingOtp(true);
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      const res = await fetch('https://smart-sos-platform.onrender.com/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: form.phone, otp: otpInput })
