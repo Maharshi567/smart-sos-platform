@@ -374,7 +374,7 @@ const styles = {
     margin: '3px 0 0', lineHeight: 1.5,
   },
   otpInputRow: {
-    display: 'flex', gap: '0.6rem',
+    display: 'flex', flexDirection: 'column', gap: '0.6rem',
   },
   otpInput: {
     flex: 1, background: '#fff',
@@ -384,12 +384,12 @@ const styles = {
     outline: 'none', letterSpacing: '4px',
     textAlign: 'center',
   },
-  verifyBtn: {
+verifyBtn: {
     background: '#16a34a', color: '#fff',
     border: 'none', borderRadius: '8px',
     padding: '12px 18px', fontSize: '0.9rem',
     fontWeight: '700', cursor: 'pointer',
-    minWidth: '70px',
+    width: '100%',
   },
   otpHint: {
     color: '#6b7280', fontSize: '0.78rem',

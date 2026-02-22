@@ -66,7 +66,7 @@ const Contacts = () => {
 
     setSendingOtp(true);
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetch('https://smart-sos-platform.onrender.com/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: form.phone })
@@ -113,7 +113,7 @@ const Contacts = () => {
 
     setVerifyingOtp(true);
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      const res = await fetch('https://smart-sos-platform.onrender.com/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: form.phone, otp: otpInput })
@@ -458,17 +458,17 @@ const styles = {
   otpIcon: { fontSize: '1.8rem', flexShrink: 0 },
   otpTitle: { color: '#16a34a', fontWeight: '700', fontSize: '0.95rem', margin: 0 },
   otpSubtitle: { color: '#374151', fontSize: '0.8rem', margin: '3px 0 0', lineHeight: 1.5 },
-  otpInputRow: { display: 'flex', gap: '0.6rem' },
+otpInputRow: { display: 'flex', flexDirection: 'column', gap: '0.6rem' },
   otpInput: {
     flex: 1, background: '#fff', border: '1px solid #86efac',
     borderRadius: '8px', padding: '12px 14px', color: '#111',
     fontSize: '1.1rem', fontWeight: '700', outline: 'none',
     letterSpacing: '4px', textAlign: 'center',
   },
-  verifyBtn: {
+ verifyBtn: {
     background: '#16a34a', color: '#fff', border: 'none',
     borderRadius: '8px', padding: '12px 16px', fontSize: '0.88rem',
-    fontWeight: '700', cursor: 'pointer', minWidth: '80px',
+    fontWeight: '700', cursor: 'pointer', width: '100%',
   },
   otpHint: { color: '#6b7280', fontSize: '0.78rem', margin: 0, lineHeight: 1.5 },
   otpTimer: { color: '#d97706', fontSize: '0.82rem', fontWeight: '600', margin: 0, textAlign: 'center' },
