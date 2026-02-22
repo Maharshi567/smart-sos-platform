@@ -100,89 +100,57 @@ const Dashboard = () => {
   // ============================================================
   // SOS SEND HELPER
   // ============================================================
-const sendSOS = useCallback(async (customMessage = null) => {
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
-        const time = new Date().toLocaleString("en-IN");
+  const sendSOS = useCallback(async (customMessage = null) => {
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat      = pos.coords.latitude;
+          const lng      = pos.coords.longitude;
+          const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
+          const time     = new Date().toLocaleString("en-IN");
 
-        try {
-          const token = localStorage.getItem("token");
-          const res = await fetch("https://smart-sos-platform.onrender.com/api/contacts", {
-            headers: { Authorization: "Bearer " + token },
-          });
+          try {
+            const token = localStorage.getItem("token");
+            const res   = await fetch("/api/contacts", {
+              headers: { Authorization: "Bearer " + token },
+            });
+            const contacts = await res.json();
 
-          if (!res.ok) throw new Error(`Failed to fetch contacts (${res.status})`);
+            if (!contacts || contacts.length === 0) {
+  setShowNoContactsPopup(true);
+  resolve(false); return;
+}
 
-          const contacts = await res.json();
+            const message = customMessage ||
+              `🚨 *EMERGENCY ARRIVED - NEED HELP!* 🚨\n\n` +
+              `*${user?.name?.toUpperCase() || "SOMEONE"}* is in danger and needs immediate help!\n\n` +
+              `📍 *Live Location:*\n${mapsLink}\n\n` +
+              `⏰ *Time:* ${time}\n\n` +
+              `🆘 *Please call or go to their location IMMEDIATELY!*\n\n` +
+              `_Sent automatically via SmartSOS Emergency App_`;
 
-          if (!contacts || contacts.length === 0) {
-            setShowNoContactsPopup(true);
+            contacts.forEach((contact, index) => {
+              if (contact.phone) {
+                let phone = contact.phone.replace(/[\s\-\(\)\+]/g, "");
+                if (phone.length === 10) phone = "91" + phone;
+                setTimeout(() => {
+                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+                }, index * 2000);
+              }
+            });
+
+            toast.success(`🚨 SOS sent to ${contacts.length} contacts!`, { autoClose: 8000 });
+            resolve(true);
+          } catch {
+            toast.error("❌ Failed to load contacts! Call 112 directly!");
             resolve(false);
-            return;
           }
-
-          const message =
-            customMessage ||
-            `🚨 *EMERGENCY ARRIVED - NEED HELP!* 🚨\n\n` +
-            `*${user?.name?.toUpperCase() || "SOMEONE"}* is in danger and needs immediate help!\n\n` +
-            `📍 *Live Location:*\n${mapsLink}\n\n` +
-            `⏰ *Time:* ${time}\n\n` +
-            `🆘 *Please call or go to their location IMMEDIATELY!*\n\n` +
-            `_Sent automatically via SmartSOS Emergency App_`;
-
-          // Open WhatsApp for each contact – use a small delay but keep gesture context
-          // Note: Browsers may still block if too many pop-ups. We'll also provide a copy fallback.
-          let openedAny = false;
-          contacts.forEach((contact, index) => {
-            if (contact.phone) {
-              let phone = contact.phone.replace(/[\s\-\(\)\+]/g, "");
-              if (phone.length === 10) phone = "91" + phone;
-              setTimeout(() => {
-                const waWindow = window.open(
-                  `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-                  "_blank"
-                );
-                if (waWindow) openedAny = true;
-              }, index * 800); // shorter delay, 800ms
-            }
-          });
-
-          // Fallback: if after 3 seconds no window was opened, offer to copy message
-          setTimeout(() => {
-            if (!openedAny) {
-              toast.info(
-                "📋 Pop-ups may be blocked. Copy the message manually or click here to copy.",
-                {
-                  onClick: () => {
-                    navigator.clipboard?.writeText(message);
-                    toast.success("✅ SOS message copied!");
-                  },
-                  autoClose: 10000,
-                }
-              );
-            }
-          }, 3500);
-
-          toast.success(`🚨 SOS sent to ${contacts.length} contacts!`, { autoClose: 8000 });
-          resolve(true);
-        } catch (err) {
-          console.error("SOS error:", err);
-          toast.error("❌ Failed to load contacts! Call 112 directly!");
-          resolve(false);
-        }
-      },
-      () => {
-        toast.error("❌ GPS not available! Enable GPS and try again.");
-        resolve(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
-    );
-  });
-}, [user]);
+        },
+        () => { toast.error("❌ GPS not available! Enable GPS and try again."); resolve(false); },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      );
+    });
+  }, [user, navigate]);
 
   // ============================================================
   // MAIN SOS BUTTON — BUG FIX #3: proper countdown cancel
@@ -396,158 +364,116 @@ const sendSOS = useCallback(async (customMessage = null) => {
     if (!silent) toast.info("📍 Live location sharing stopped.");
   }, []);
 
-const startLiveShare = async () => {
-  // Step 1: Check if we already have a location in state (might be stale)
-  if (!location) {
-    toast.error("❌ Location required! Please enable GPS.");
-    setShowLocationPopup(true);
-    return;
-  }
-
-  setShareStarting(true);
-
-  // Step 2: Try to get a fresh location (user may have moved)
-  try {
-    const pos = await new Promise((resolve, reject) =>
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 15000,          // increased timeout for mobile
-        maximumAge: 0,
-      })
-    );
-
-    const lat = pos.coords.latitude;
-    const lng = pos.coords.longitude;
-    const token = localStorage.getItem("token");
-
-    // Step 3: Call the backend API
-    const res = await fetch("https://smart-sos-platform.onrender.com/api/tracking/start", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token,
-      },
-      body: JSON.stringify({ lat, lng, duration: shareDuration, name: user?.name || "User" }),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Server error ${res.status}: ${errorText}`);
+  const startLiveShare = async () => {
+    if (!location) {
+      toast.error("❌ Location required!"); setShowLocationPopup(true); return;
     }
+    setShareStarting(true);
 
-    const data = await res.json();
-    // Adjust this line based on your actual API response structure
-    const trackingId = data.trackingId || data.id || data.data?.trackingId;
-    if (!trackingId) throw new Error("No tracking ID returned from server");
-
-    trackingIdRef.current = trackingId;
-    const link = `${window.location.origin}/track/${trackingId}`;
-
-    setShareLink(link);
-    setLiveShareActive(true);
-    setShowLiveShare(false);
-    setShareStarting(false);
-
-    const totalSeconds = shareDuration * 3600;
-    setShareTimeLeft(totalSeconds);
-    shareExpiredRef.current = false;
-
-    // Step 4: Send WhatsApp to contacts (optional, non‑blocking)
     try {
-      const contactRes = await fetch("https://smart-sos-platform.onrender.com/api/contacts", {
-        headers: { Authorization: "Bearer " + token },
-      });
-      if (!contactRes.ok) throw new Error("Failed to fetch contacts");
-      const contacts = await contactRes.json();
-
-      if (contacts && contacts.length > 0) {
-        const waMsg =
-          `📍 *LIVE LOCATION SHARED* 📍\n\n` +
-          `*${user?.name || "Someone"}* is sharing their live location with you!\n\n` +
-          `🔗 *Track them here:*\n${link}\n\n` +
-          `⏰ *Active for:* ${shareDuration} hour${shareDuration > 1 ? "s" : ""}\n\n` +
-          `_Shared via SmartSOS Safety App_`;
-
-        let openedAny = false;
-        contacts.forEach((contact, index) => {
-          if (contact.phone) {
-            let phone = contact.phone.replace(/[\s\-\(\)\+]/g, "");
-            if (phone.length === 10) phone = "91" + phone;
-            setTimeout(() => {
-              const w = window.open(
-                `https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`,
-                "_blank"
-              );
-              if (w) openedAny = true;
-            }, index * 800);
-          }
-        });
-
-        setTimeout(() => {
-          if (!openedAny) {
-            toast.info(
-              "📋 Pop-ups blocked? Click to copy the share link.",
-              { onClick: copyLink, autoClose: 8000 }
-            );
-          }
-        }, 3000);
-      }
-    } catch (waErr) {
-      console.warn("WhatsApp send failed:", waErr);
-      toast.warning("⚠️ Location sharing started but could not send WhatsApp. Share link manually.");
-    }
-
-    // Step 5: Set up periodic location updates
-    liveShareIntervalRef.current = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        async (p) => {
-          try {
-            await fetch(`https://smart-sos-platform.onrender.com/api/tracking/${trackingIdRef.current}`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: "Bearer " + token,
-              },
-              body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude }),
-            });
-          } catch (err) {
-            console.error("Location update error:", err);
-          }
-        },
-        () => {},
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }
+      const pos = await new Promise((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true, timeout: 12000, maximumAge: 0,
+        })
       );
-    }, 30000);
 
-    // Step 6: Countdown timer
-    shareCountdownRef.current = setInterval(() => {
-      setShareTimeLeft((prev) => {
-        if (prev <= 1) {
-          shareExpiredRef.current = true;
-          return 0;
-        }
-        return prev - 1;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const token = localStorage.getItem("token");
+
+const res = await fetch("https://smart-sos-platform.onrender.com/api/tracking/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ lat, lng, duration: shareDuration, name: user?.name || "User" }),
       });
-    }, 1000);
-  } catch (err) {
-    console.error("Live share error:", err);
-    setShareStarting(false);
-    trackingIdRef.current = null;
 
-    // Distinguish between geolocation errors and other errors
-    if (err.code === 1) { // PERMISSION_DENIED
-      toast.error("❌ Location permission denied. Please enable GPS in your browser settings.");
-    } else if (err.code === 2) { // POSITION_UNAVAILABLE
-      toast.error("❌ GPS signal unavailable. Please go outside and try again.");
-    } else if (err.code === 3) { // TIMEOUT
-      toast.error("❌ GPS timed out. Please check your connection and try again.");
-    } else if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
-      toast.error("❌ Network error. Please check your internet connection and try again.");
-    } else {
-      toast.error(`❌ Failed to start live sharing: ${err.message}`);
+      const data = await res.json();
+      if (!data.trackingId) throw new Error("No tracking ID returned from server");
+
+      // BUG FIX #1: Store in ref so stopLiveShare always has fresh value
+      trackingIdRef.current = data.trackingId;
+      const link = `${window.location.origin}/track/${data.trackingId}`;
+
+      setShareLink(link);
+      setLiveShareActive(true);
+      setShowLiveShare(false);
+      setShareStarting(false);
+
+      const totalSeconds = shareDuration * 3600;
+      setShareTimeLeft(totalSeconds);
+      shareExpiredRef.current = false;
+
+      // Send WhatsApp to all contacts
+      try {
+        const contactRes = await fetch("https://smart-sos-platform.onrender.com/api/contacts", {
+          headers: { Authorization: "Bearer " + token },
+        });
+        const contacts = await contactRes.json();
+
+        if (contacts && contacts.length > 0) {
+          const waMsg =
+            `📍 *LIVE LOCATION SHARED* 📍\n\n` +
+            `*${user?.name || "Someone"}* is sharing their live location with you!\n\n` +
+            `🔗 *Track them here:*\n${link}\n\n` +
+            `⏰ *Active for:* ${shareDuration} hour${shareDuration > 1 ? "s" : ""}\n\n` +
+            `_Shared via SmartSOS Safety App_`;
+
+          contacts.forEach((contact, index) => {
+            if (contact.phone) {
+              let phone = contact.phone.replace(/[\s\-\(\)\+]/g, "");
+              if (phone.length === 10) phone = "91" + phone;
+              setTimeout(() => {
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`, "_blank");
+              }, index * 2000);
+            }
+          });
+          toast.success(`📍 Live location sent to ${contacts.length} contacts via WhatsApp!`, { autoClose: 8000 });
+        }
+      } catch {
+        toast.warning("⚠️ Location sharing started but could not send WhatsApp. Share link manually.");
+      }
+
+      // Update GPS every 30 seconds
+      liveShareIntervalRef.current = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          async (p) => {
+            try {
+              await fetch(`https://smart-sos-platform.onrender.com/api/tracking/${trackingIdRef.current}`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: "Bearer " + token,
+                },
+                body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude }),
+              });
+            } catch {}
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }
+        );
+      }, 30000);
+
+      // BUG FIX #2: Countdown — don't call stopLiveShare inside setState
+      // Instead set a flag ref and handle it in a separate effect check
+      shareCountdownRef.current = setInterval(() => {
+        setShareTimeLeft((prev) => {
+          if (prev <= 1) {
+            shareExpiredRef.current = true; // flag only — no side effects in setState
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+    } catch (err) {
+      setShareStarting(false);
+      trackingIdRef.current = null;
+      toast.error("❌ Failed to start live sharing! Check your internet connection.");
     }
-  }
-};
+  };
 
   // BUG FIX #2: Watch for expiry flag and call stopLiveShare outside setState
   useEffect(() => {
