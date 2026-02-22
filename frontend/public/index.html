@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ff2d2d" />
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Smart SOS Emergency Platform — Women Safety & Emergency Services Finder. One press to get help instantly." />
+    <meta name="keywords" content="SOS, Emergency, Women Safety, Police, Ambulance, Fire" />
+    <meta name="author" content="SmartSOS" />
+
+    <!-- Open Graph (for sharing on WhatsApp, Facebook etc) -->
+    <meta property="og:title" content="SmartSOS — Emergency Platform" />
+    <meta property="og:description" content="One press to get help instantly. Share live location, alert contacts, find emergency services." />
+    <meta property="og:type" content="website" />
+
+    <!-- PWA Support -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>SmartSOS — Emergency Platform</title>
+
+    <style>
+      /* Prevent white flash on load */
+      body {
+        background-color: #f5f7fa;
+        margin: 0;
+        font-family: 'Inter', sans-serif;
+      }
+
+      /* Loading screen before React loads */
+      #initial-loader {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: #232d45;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        gap: 1rem;
+      }
+
+      #initial-loader h1 {
+        color: #ff2d2d;
+        font-size: 2rem;
+        font-weight: 900;
+        letter-spacing: 2px;
+        margin: 0;
+      }
+
+      #initial-loader p {
+        color: #a0aec0;
+        font-size: 0.9rem;
+        margin: 0;
+      }
+
+      .loader-ring {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border: 3px solid #232d45;
+        border-top: 3px solid #ff2d2d;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>
+      You need to enable JavaScript to run SmartSOS Emergency Platform.
+    </noscript>
+
+    <!-- Loading screen shown before React app loads -->
+    <div id="initial-loader">
+      <span style="font-size: 3rem;">🚨</span>
+      <h1>SmartSOS</h1>
+      <p>Loading Emergency Platform...</p>
+      <div class="loader-ring"></div>
+    </div>
+
+    <!-- React app mounts here -->
+    <div id="root"></div>
+
+    <!-- Hide loader once React loads -->
+    <script>
+      window.addEventListener('load', function () {
+        const loader = document.getElementById('initial-loader');
+        if (loader) {
+          loader.style.opacity = '0';
+          loader.style.transition = 'opacity 0.5s ease';
+          setTimeout(() => loader.remove(), 500);
+        }
+      });
+    </script>
+  </body>
+</html>

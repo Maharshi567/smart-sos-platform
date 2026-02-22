@@ -1,0 +1,17 @@
+{
+  "short_name": "SmartSOS",
+  "name": "SmartSOS Emergency Platform",
+  "description": "Women Safety & Emergency Services Finder",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#ff2d2d",
+  "background_color": "#232d45",
+  "orientation": "portrait"
+}

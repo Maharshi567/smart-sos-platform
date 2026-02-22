@@ -1,0 +1,140 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f7fa;
+  color: #212121;
+  min-height: 100vh;
+}
+
+:root {
+  --primary: #ff2d2d;
+  --primary-dark: #cc0000;
+  --card-bg: #ffffff;
+  --card-border: #e8ecf0;
+  --text-main: #212121;
+  --text-light: #6b7280;
+  --bg-main: #f5f7fa;
+  --bg-card: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #ff2d2d; border-radius: 10px; }
+
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; border: none; outline: none; }
+
+select {
+  background-color: #ffffff !important;
+  color: #212121 !important;
+  border: 1px solid #e8ecf0 !important;
+}
+select option {
+  background-color: #ffffff !important;
+  color: #212121 !important;
+}
+select option:hover,
+select option:checked {
+  background-color: #ff2d2d !important;
+  color: #ffffff !important;
+}
+input, textarea, select { color-scheme: light; }
+/* ===================================
+   RESPONSIVE STYLES FOR ALL SCREENS
+=================================== */
+
+/* ===== NAVBAR ===== */
+@media (max-width: 768px) {
+  /* Hide desktop links on mobile */
+  nav > div:nth-child(2) {
+    display: none !important;
+  }
+}
+
+/* ===== GENERAL CONTAINERS ===== */
+@media (max-width: 768px) {
+  div[style*="maxWidth: '1100px'"],
+  div[style*="max-width: 1100px"] {
+    padding: 1rem !important;
+  }
+}
+
+/* ===== MOBILE BASE ===== */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+}
+/* ===== GLOBAL MOBILE FIXES ===== */
+@media (max-width: 768px) {
+
+  /* Navbar hamburger show */
+  button[style*="display: none"] {
+    display: flex !important;
+  }
+
+  /* Hide desktop nav links */
+  nav > div:nth-child(2),
+  nav > div:nth-child(3) {
+    display: none !important;
+  }
+
+  /* Full width containers */
+  div[style*="maxWidth"] {
+    max-width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Stack grids on mobile */
+  div[style*="gridTemplateColumns"] {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  }
+
+  /* Hero sections */
+  section[style*="flex-wrap"] {
+    flex-direction: column !important;
+  }
+
+  /* Cards full width */
+  div[style*="minWidth: '300px'"] {
+    min-width: 100% !important;
+  }
+
+  /* Font sizes */
+  h1 { font-size: clamp(1.6rem, 6vw, 2.5rem) !important; }
+  h2 { font-size: clamp(1.3rem, 5vw, 2rem) !important; }
+  h3 { font-size: clamp(1rem, 4vw, 1.3rem) !important; }
+
+  /* Padding fixes */
+  section {
+    padding-left: 1.2rem !important;
+    padding-right: 1.2rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small phones */
+  div[style*="padding: '2rem'"] {
+    padding: 1rem !important;
+  }
+
+  /* Button sizes */
+  button {
+    min-height: 44px;
+  }
+
+  /* Input sizes */
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    min-height: 44px;
+  }
+}
