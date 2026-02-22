@@ -20,7 +20,15 @@ const io = new Server(server, {
 });
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://smart-sos-platform-waip.vercel.app'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use("/api/tracking", trackingRoutes);
@@ -56,5 +64,5 @@ app.get('/', (req, res) => res.send('Smart SOS API Running 🚨'));
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 module.exports = { io };
