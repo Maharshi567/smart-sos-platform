@@ -397,18 +397,21 @@ const sendSOS = useCallback(async (customMessage = null) => {
   }, []);
 
 const startLiveShare = async () => {
+  // Step 1: Check if we already have a location in state (might be stale)
   if (!location) {
-    toast.error("❌ Location required!");
+    toast.error("❌ Location required! Please enable GPS.");
     setShowLocationPopup(true);
     return;
   }
+
   setShareStarting(true);
 
+  // Step 2: Try to get a fresh location (user may have moved)
   try {
     const pos = await new Promise((resolve, reject) =>
       navigator.geolocation.getCurrentPosition(resolve, reject, {
         enableHighAccuracy: true,
-        timeout: 12000,
+        timeout: 15000,          // increased timeout for mobile
         maximumAge: 0,
       })
     );
@@ -417,6 +420,7 @@ const startLiveShare = async () => {
     const lng = pos.coords.longitude;
     const token = localStorage.getItem("token");
 
+    // Step 3: Call the backend API
     const res = await fetch("https://smart-sos-platform.onrender.com/api/tracking/start", {
       method: "POST",
       headers: {
@@ -432,7 +436,7 @@ const startLiveShare = async () => {
     }
 
     const data = await res.json();
-    // Adjust this line according to your actual API response structure
+    // Adjust this line based on your actual API response structure
     const trackingId = data.trackingId || data.id || data.data?.trackingId;
     if (!trackingId) throw new Error("No tracking ID returned from server");
 
@@ -448,7 +452,7 @@ const startLiveShare = async () => {
     setShareTimeLeft(totalSeconds);
     shareExpiredRef.current = false;
 
-    // Send WhatsApp to all contacts (with fallback as in SOS)
+    // Step 4: Send WhatsApp to contacts (optional, non‑blocking)
     try {
       const contactRes = await fetch("https://smart-sos-platform.onrender.com/api/contacts", {
         headers: { Authorization: "Bearer " + token },
@@ -483,10 +487,7 @@ const startLiveShare = async () => {
           if (!openedAny) {
             toast.info(
               "📋 Pop-ups blocked? Click to copy the share link.",
-              {
-                onClick: copyLink,
-                autoClose: 8000,
-              }
+              { onClick: copyLink, autoClose: 8000 }
             );
           }
         }, 3000);
@@ -496,7 +497,7 @@ const startLiveShare = async () => {
       toast.warning("⚠️ Location sharing started but could not send WhatsApp. Share link manually.");
     }
 
-    // Update location every 30 seconds
+    // Step 5: Set up periodic location updates
     liveShareIntervalRef.current = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         async (p) => {
@@ -518,7 +519,7 @@ const startLiveShare = async () => {
       );
     }, 30000);
 
-    // Countdown timer
+    // Step 6: Countdown timer
     shareCountdownRef.current = setInterval(() => {
       setShareTimeLeft((prev) => {
         if (prev <= 1) {
@@ -529,10 +530,22 @@ const startLiveShare = async () => {
       });
     }, 1000);
   } catch (err) {
-    console.error("Live share start error:", err);
-    toast.error(`❌ Failed to start live sharing: ${err.message}`);
+    console.error("Live share error:", err);
     setShareStarting(false);
     trackingIdRef.current = null;
+
+    // Distinguish between geolocation errors and other errors
+    if (err.code === 1) { // PERMISSION_DENIED
+      toast.error("❌ Location permission denied. Please enable GPS in your browser settings.");
+    } else if (err.code === 2) { // POSITION_UNAVAILABLE
+      toast.error("❌ GPS signal unavailable. Please go outside and try again.");
+    } else if (err.code === 3) { // TIMEOUT
+      toast.error("❌ GPS timed out. Please check your connection and try again.");
+    } else if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
+      toast.error("❌ Network error. Please check your internet connection and try again.");
+    } else {
+      toast.error(`❌ Failed to start live sharing: ${err.message}`);
+    }
   }
 };
 
