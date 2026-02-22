@@ -3,7 +3,7 @@ import {
   MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap,
 } from "react-leaflet";
 import L from "leaflet";
-
+const routeUpdateTimeoutRef = useRef(null);
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
@@ -49,18 +49,39 @@ const calcTime = (distKm) => {
 
 // ===== MAP HELPERS =====
 // Smoothly pan map to user location without resetting zoom
+// ===== MAP HELPERS =====
 const UserLocationUpdater = ({ location }) => {
   const map = useMap();
   const firstRun = useRef(true);
+  const mapMovedByUser = useRef(false);
+
+  // Detect when user starts dragging or zooming
+  useEffect(() => {
+    const onDragStart = () => { mapMovedByUser.current = true; };
+    const onZoomStart = () => { mapMovedByUser.current = true; };
+
+    map.on('dragstart', onDragStart);
+    map.on('zoomstart', onZoomStart);
+
+    return () => {
+      map.off('dragstart', onDragStart);
+      map.off('zoomstart', onZoomStart);
+    };
+  }, [map]);
+
   useEffect(() => {
     if (!location) return;
     if (firstRun.current) {
       map.setView([location.lat, location.lng], 15);
       firstRun.current = false;
     } else {
-      map.panTo([location.lat, location.lng], { animate: true, duration: 1 });
+      // Only pan if the user hasn't touched the map
+      if (!mapMovedByUser.current) {
+        map.panTo([location.lat, location.lng], { animate: true, duration: 1 });
+      }
     }
   }, [location, map]);
+
   return null;
 };
 
@@ -332,31 +353,70 @@ const MapPage = () => {
 
   // ===== UPDATE ROUTE when user moves =====
   useEffect(() => {
-    if (!route || !selectedService || !location) return;
-    // Silently update route origin as user moves
-    const update = async () => {
-      try {
-        const url =
-          `https://router.project-osrm.org/route/v1/driving/` +
-          `${location.lng},${location.lat};${selectedService.lng},${selectedService.lat}` +
-          `?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.routes?.[0]) {
-          setRoute(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
-        }
-      } catch {}
-    };
-    update();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location]);
+  if (!selectedService || !location) return;
+
+  // Clear any pending timeout
+  if (routeUpdateTimeoutRef.current) {
+    clearTimeout(routeUpdateTimeoutRef.current);
+  }
+
+  // Set a new timeout to update route after 2 seconds of inactivity
+  routeUpdateTimeoutRef.current = setTimeout(async () => {
+    try {
+      const url =
+        `https://router.project-osrm.org/route/v1/driving/` +
+        `${location.lng},${location.lat};${selectedService.lng},${selectedService.lat}` +
+        `?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.routes?.[0]) {
+        setRoute(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
+      } else {
+        // Optional: fallback to straight line if no route
+        setRoute([[location.lat, location.lng], [selectedService.lat, selectedService.lng]]);
+      }
+    } catch {
+      setRoute([[location.lat, location.lng], [selectedService.lat, selectedService.lng]]);
+    }
+  }, 2000);
+
+  // Cleanup timeout on unmount or when location/service changes
+  return () => {
+    if (routeUpdateTimeoutRef.current) {
+      clearTimeout(routeUpdateTimeoutRef.current);
+    }
+  };
+}, [location, selectedService]);
 
   const clearRoute = () => {
     setRoute(null);
     setRoutingTo(null);
     setSelectedService(null);
   };
+const debouncedUpdateRoute = useCallback(() => {
+  if (!selectedService || !location) return;
 
+  if (routeUpdateTimeoutRef.current) clearTimeout(routeUpdateTimeoutRef.current);
+
+  routeUpdateTimeoutRef.current = setTimeout(async () => {
+    try {
+      const url =
+        `https://router.project-osrm.org/route/v1/driving/` +
+        `${location.lng},${location.lat};${selectedService.lng},${selectedService.lat}` +
+        `?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.routes?.[0]) {
+        setRoute(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
+      } else {
+        // fallback to straight line
+        setRoute([[location.lat, location.lng], [selectedService.lat, selectedService.lng]]);
+      }
+    } catch {
+      setRoute([[location.lat, location.lng], [selectedService.lat, selectedService.lng]]);
+    }
+  }, 2000); // 2 seconds after last move
+}, [selectedService, location]);
   const openNavigation = (service) => {
     const loc = location || locationRef.current;
     const url = loc
