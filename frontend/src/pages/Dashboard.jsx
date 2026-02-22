@@ -17,7 +17,7 @@ const Dashboard = () => {
   const [sosCountdown, setSosCountdown]         = useState(0);
   const [showLocationPopup, setShowLocationPopup] = useState(false);
   const [locationDenied, setLocationDenied]     = useState(false);
-
+  const [showNoContactsPopup, setShowNoContactsPopup] = useState(false);
   // BUG FIX #3 — ref to know if countdown is running so cancel works
   const sosCountingRef = useRef(false);
   const sosCountIntervalRef = useRef(null);
@@ -117,10 +117,9 @@ const Dashboard = () => {
             const contacts = await res.json();
 
             if (!contacts || contacts.length === 0) {
-              toast.error("❌ No contacts found! Add emergency contacts first!", { autoClose: 8000 });
-              setTimeout(() => navigate("/contacts"), 2000);
-              resolve(false); return;
-            }
+  setShowNoContactsPopup(true);
+  resolve(false); return;
+}
 
             const message = customMessage ||
               `🚨 *EMERGENCY ARRIVED - NEED HELP!* 🚨\n\n` +
@@ -355,7 +354,7 @@ const Dashboard = () => {
     if (trackingIdRef.current) {
       try {
         const token = localStorage.getItem("token");
-        await fetch(`/api/tracking/${trackingIdRef.current}/stop`, {
+        await fetch(`https://smart-sos-platform.onrender.com/api/tracking/${trackingIdRef.current}/stop`, {
           method: "PATCH",
           headers: { Authorization: "Bearer " + token },
         });
@@ -382,7 +381,7 @@ const Dashboard = () => {
       const lng = pos.coords.longitude;
       const token = localStorage.getItem("token");
 
-      const res = await fetch("/api/tracking/start", {
+const res = await fetch("https://smart-sos-platform.onrender.com/api/tracking/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -409,7 +408,7 @@ const Dashboard = () => {
 
       // Send WhatsApp to all contacts
       try {
-        const contactRes = await fetch("/api/contacts", {
+        const contactRes = await fetch("https://smart-sos-platform.onrender.com/api/contacts", {
           headers: { Authorization: "Bearer " + token },
         });
         const contacts = await contactRes.json();
@@ -442,7 +441,7 @@ const Dashboard = () => {
         navigator.geolocation.getCurrentPosition(
           async (p) => {
             try {
-              await fetch(`/api/tracking/${trackingIdRef.current}`, {
+              await fetch(`https://smart-sos-platform.onrender.com/api/tracking/${trackingIdRef.current}`, {
                 method: "PATCH",
                 headers: {
                   "Content-Type": "application/json",
@@ -571,7 +570,25 @@ const Dashboard = () => {
           </div>
         </div>
       )}
-
+      {showNoContactsPopup && (
+  <div style={styles.popupOverlay}>
+    <div style={styles.popupCard}>
+      <div style={styles.popupIcon}>👥</div>
+      <h2 style={styles.popupTitle}>No Contacts Added!</h2>
+      <p style={styles.popupText}>
+        You need at least 1 emergency contact before using SOS.
+        Add a trusted contact who will receive your emergency alert.
+      </p>
+      <button onClick={() => { setShowNoContactsPopup(false); navigate("/contacts"); }}
+        style={styles.popupAllowBtn}>
+        👥 Add Emergency Contact
+      </button>
+      <button onClick={() => setShowNoContactsPopup(false)} style={styles.popupDenyBtn}>
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
       {/* ── LOCATION DENIED BAR ── */}
       {locationDenied && !showLocationPopup && (
         <div style={styles.locationWarning}>
