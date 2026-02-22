@@ -111,7 +111,7 @@ const Dashboard = () => {
 
           try {
             const token = localStorage.getItem("token");
-            const res   = await fetch("/api/contacts", {
+            const res = await fetch("https://smart-sos-platform.onrender.com/api/contacts", {
               headers: { Authorization: "Bearer " + token },
             });
             const contacts = await res.json();
