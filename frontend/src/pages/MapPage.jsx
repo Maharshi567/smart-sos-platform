@@ -20,24 +20,86 @@ const createIcon = (emoji, size = 30) =>
     iconAnchor: [size / 2, size],
   });
 
-// DELETE the old userIcon const and replace with:
+// ===== USER ARROW ICON — only the arrow rotates, NOT the map =====
 const createUserArrowIcon = (headingDeg) => L.divIcon({
   html: `
     <div style="
-      width:32px; height:32px;
+      width:44px; height:44px;
       display:flex; align-items:center; justify-content:center;
-      transform:rotate(${headingDeg}deg);
-      transition:transform 0.3s ease;
+      position:relative;
     ">
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <polygon points="14,2 22,24 14,19 6,24" fill="#3b82f6" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
-      </svg>
+      <!-- Accuracy halo -->
+      <div style="
+        position:absolute;
+        width:44px; height:44px;
+        border-radius:50%;
+        background:rgba(59,130,246,0.15);
+        border:2px solid rgba(59,130,246,0.4);
+      "></div>
+      <!-- Rotating arrow -->
+      <div style="
+        transform:rotate(${headingDeg}deg);
+        transition:transform 0.3s ease;
+        display:flex; align-items:center; justify-content:center;
+      ">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <!-- Shadow/glow -->
+          <polygon points="16,3 25,27 16,21 7,27" fill="rgba(0,0,0,0.2)" transform="translate(1,2)"/>
+          <!-- Main arrow -->
+          <polygon points="16,3 25,27 16,21 7,27" fill="#2563eb" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
+          <!-- Center dot -->
+          <circle cx="16" cy="16" r="3" fill="white" opacity="0.9"/>
+        </svg>
+      </div>
     </div>
   `,
   className: "",
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
 });
+
+// ===== BEARING CALCULATOR =====
+// Calculate compass bearing from point A to point B (in degrees, 0=North)
+const calcBearing = (lat1, lng1, lat2, lng2) => {
+  const toRad = d => (d * Math.PI) / 180;
+  const toDeg = r => (r * 180) / Math.PI;
+  const dLng = toRad(lng2 - lng1);
+  const rlat1 = toRad(lat1);
+  const rlat2 = toRad(lat2);
+  const y = Math.sin(dLng) * Math.cos(rlat2);
+  const x = Math.cos(rlat1) * Math.sin(rlat2) - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLng);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+};
+
+// Find which route segment the user is currently on (closest point)
+const findCurrentSegment = (route, userLat, userLng) => {
+  if (!route || route.length < 2) return { segIndex: 0, bearing: 0 };
+  let minDist = Infinity;
+  let bestSeg = 0;
+  for (let i = 0; i < route.length - 1; i++) {
+    const [lat, lng] = route[i];
+    const d = Math.hypot(lat - userLat, lng - userLng);
+    if (d < minDist) { minDist = d; bestSeg = i; }
+  }
+  const [lat1, lng1] = route[bestSeg];
+  const [lat2, lng2] = route[bestSeg + 1];
+  return {
+    segIndex: bestSeg,
+    bearing: calcBearing(lat1, lng1, lat2, lng2),
+  };
+};
+
+// Determine next turn type: "left", "right", "straight", or null
+const getNextTurn = (route, segIndex) => {
+  if (!route || segIndex + 2 >= route.length) return null;
+  const b1 = calcBearing(route[segIndex][0], route[segIndex][1], route[segIndex + 1][0], route[segIndex + 1][1]);
+  const b2 = calcBearing(route[segIndex + 1][0], route[segIndex + 1][1], route[segIndex + 2][0], route[segIndex + 2][1]);
+  let diff = ((b2 - b1) + 360) % 360;
+  if (diff > 180) diff -= 360; // -180 to +180
+  if (Math.abs(diff) < 15) return { type: "straight", angle: diff };
+  if (diff > 0) return { type: "right", angle: diff };
+  return { type: "left", angle: diff };
+};
 
 // ===== HELPERS =====
 const calcDistance = (lat1, lng1, lat2, lng2) => {
@@ -59,44 +121,30 @@ const calcTime = (distKm) => {
   return Math.floor(mins / 60) + "h " + (mins % 60) + "m";
 };
 
-// ===== MAP HELPERS =====
-// Smoothly pan map to user location without resetting zoom
-const UserLocationUpdater = ({ location, shouldRecentre, onRecentred, navigationActive }) => {
+// ===== MAP HELPER — Re-centre ONLY on button click, NEVER automatically =====
+const UserLocationUpdater = ({ location, shouldRecentre, onRecentred }) => {
   const map = useMap();
   const firstRun = useRef(true);
-  const userPannedRef = useRef(false);
 
-  useEffect(() => {
-    const onDrag = () => { userPannedRef.current = true; };
-    map.on("dragstart", onDrag);
-    return () => map.off("dragstart", onDrag);
-  }, [map]);
-
+  // Set view only on FIRST load
   useEffect(() => {
     if (!location || !firstRun.current) return;
     map.setView([location.lat, location.lng], 15);
     firstRun.current = false;
   }, [location, map]);
 
-  // Auto-follow ONLY during navigation
-  useEffect(() => {
-    if (!navigationActive || !location || userPannedRef.current) return;
-    map.setView([location.lat, location.lng], 17, { animate: true, duration: 0.5 });
-  }, [location, navigationActive, map]);
-
-  // Re-centre re-enables auto-follow
+  // Re-centre ONLY when button clicked
   useEffect(() => {
     if (shouldRecentre && location) {
-      userPannedRef.current = false;
-      map.setView([location.lat, location.lng], navigationActive ? 17 : 15, { animate: true, duration: 0.8 });
+      map.setView([location.lat, location.lng], 15, { animate: true, duration: 0.8 });
       onRecentred();
     }
-  }, [shouldRecentre, location, map, onRecentred, navigationActive]);
+  }, [shouldRecentre, location, map, onRecentred]);
 
   return null;
 };
 
-// Fit route on map
+// ===== ROUTE LAYER — draw route polyline, fit once =====
 const RouteLayer = ({ route }) => {
   const map = useMap();
   const fittedRef = useRef(false);
@@ -109,27 +157,11 @@ const RouteLayer = ({ route }) => {
   return route ? (
     <Polyline
       positions={route}
-      pathOptions={{ color: "#ff2d2d", weight: 6, opacity: 1, dashArray: "14, 7" }}
+      pathOptions={{ color: "#2563eb", weight: 7, opacity: 0.9, lineCap: "round", lineJoin: "round" }}
     />
   ) : null;
 };
-// ADD THIS ENTIRE BLOCK after RouteLayer component (around line 84):
-const MapRotator = ({ heading, active }) => {
-  const map = useMap();
-  useEffect(() => {
-    const container = map.getContainer();
-    const angle = active ? -heading : 0;
-    container.style.transform = `rotate(${angle}deg)`;
-    container.style.transformOrigin = "center center";
-    container.style.transition = "transform 0.3s ease";
-    const controls = container.querySelectorAll(".leaflet-control-container");
-    controls.forEach(c => {
-      c.style.transform = `rotate(${active ? heading : 0}deg)`;
-      c.style.transformOrigin = "center center";
-    });
-  }, [heading, active, map]);
-  return null;
-};
+
 // ===== OVERPASS QUERY BUILDER =====
 const buildQuery = (lat, lng, radiusM) => `
   [out:json][timeout:120];
@@ -199,15 +231,9 @@ const parseElement = (el, userLat, userLng, radiusKm) => {
   if (!type) return null;
 
   return {
-    id: el.id,
-    type,
-    name,
-    lat,
-    lng,
-    distance: dist + " km",
-    distNum: dist,
-    phone,
-    time: calcTime(dist),
+    id: el.id, type, name, lat, lng,
+    distance: dist + " km", distNum: dist,
+    phone, time: calcTime(dist),
     address: tags["addr:street"]
       ? (tags["addr:housenumber"] ? tags["addr:housenumber"] + ", " : "") +
         tags["addr:street"] +
@@ -216,6 +242,40 @@ const parseElement = (el, userLat, userLng, radiusKm) => {
     website: tags.website || tags["contact:website"] || "",
     opening_hours: tags.opening_hours || "",
   };
+};
+
+// ===== TURN DIRECTION BANNER =====
+const TurnBanner = ({ turn, distToTurn }) => {
+  if (!turn || turn.type === "straight") return null;
+  const isRight = turn.type === "right";
+  return (
+    <div style={{
+      position: "absolute", top: "12px", left: "12px", zIndex: 1000,
+      background: "#1e293b", color: "#fff",
+      borderRadius: "16px", padding: "12px 18px",
+      display: "flex", alignItems: "center", gap: "12px",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+      fontFamily: "sans-serif", minWidth: "180px",
+      border: "2px solid rgba(255,255,255,0.1)",
+    }}>
+      <div style={{
+        width: "48px", height: "48px", borderRadius: "12px",
+        background: isRight ? "#2563eb" : "#7c3aed",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "1.6rem", flexShrink: 0,
+      }}>
+        {isRight ? "↱" : "↰"}
+      </div>
+      <div>
+        <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          {distToTurn < 0.05 ? "Now" : `In ${Math.round(distToTurn * 1000)}m`}
+        </div>
+        <div style={{ fontSize: "1rem", fontWeight: "800", marginTop: "2px" }}>
+          Turn {turn.type}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ===== MAIN COMPONENT =====
@@ -230,18 +290,23 @@ const MapPage = () => {
   const [selectedService, setSelectedService] = useState(null);
   const [radiusUsed, setRadiusUsed] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [heading, setHeading] = useState(0);
+  const [shouldRecentre, setShouldRecentre] = useState(false);
+  // Navigation state
+  const [currentSegment, setCurrentSegment] = useState(null);
+  const [nextTurn, setNextTurn] = useState(null);
+  const [routeBearing, setRouteBearing] = useState(0);
+
   const watchRef = useRef(null);
   const locationRef = useRef(null);
-const [heading, setHeading] = useState(0);
-const [shouldRecentre, setShouldRecentre] = useState(false);
-const mapInstanceRef = useRef(null);
+
   const filters = [
-    { key: "all",      label: "🔍 All",             color: "#e94560" },
-    { key: "hospital", label: "🏥 Hospitals",        color: "#10b981" },
-    { key: "child",    label: "👶 Child Hospitals",  color: "#f43f5e" },
-    { key: "clinic",   label: "🏨 Clinics",          color: "#8b5cf6" },
-    { key: "police",   label: "🚓 Police",           color: "#3b82f6" },
-    { key: "fire",     label: "🚒 Fire",             color: "#f97316" },
+    { key: "all",      label: "🔍 All",            color: "#e94560" },
+    { key: "hospital", label: "🏥 Hospitals",       color: "#10b981" },
+    { key: "child",    label: "👶 Child Hospitals", color: "#f43f5e" },
+    { key: "clinic",   label: "🏨 Clinics",         color: "#8b5cf6" },
+    { key: "police",   label: "🚓 Police",          color: "#3b82f6" },
+    { key: "fire",     label: "🚒 Fire",            color: "#f97316" },
   ];
 
   const sections = [
@@ -267,53 +332,53 @@ const mapInstanceRef = useRef(null);
     hospital: "🏥", child: "👶", clinic: "🏨", police: "🚓", fire: "🚒"
   }[type] || "📍");
 
-  // ===== FETCH REAL SERVICES with auto-expanding radius =====
+  // ===== UPDATE navigation info when location or route changes =====
+  useEffect(() => {
+    if (!route || !location) return;
+    const { segIndex, bearing } = findCurrentSegment(route, location.lat, location.lng);
+    setCurrentSegment(segIndex);
+    setRouteBearing(bearing);
+    const turn = getNextTurn(route, segIndex);
+    setNextTurn(turn);
+  }, [route, location]);
+
+  // ===== FETCH REAL SERVICES =====
   const fetchServices = useCallback(async (lat, lng) => {
     setFetchingServices(true);
     setServices([]);
 
-    const radii = [5000, 10000, 20000, 35000, 50000, 75000, 100000]; // meters — auto expand
+    const radii = [5000, 10000, 20000, 35000, 50000, 75000, 100000];
     let allResults = [];
     let usedRadius = 5;
 
     for (const radiusM of radii) {
       const radiusKm = radiusM / 1000;
       usedRadius = radiusKm;
-
       try {
         const res = await fetch("https://overpass-api.de/api/interpreter", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: "data=" + encodeURIComponent(buildQuery(lat, lng, radiusM)),
         });
-
         if (!res.ok) continue;
         const data = await res.json();
-
         const parsed = [];
         const seen = new Set();
-
         data.elements.forEach((el) => {
           const item = parseElement(el, lat, lng, radiusKm);
           if (!item) return;
-          // Deduplicate by name + type
           const key = item.type + "|" + item.name.toLowerCase().trim();
           if (seen.has(key)) return;
           seen.add(key);
           parsed.push(item);
         });
-
         parsed.sort((a, b) => a.distNum - b.distNum);
         allResults = parsed;
-
-        // Check if we have at least 10 of each type that exists
         const typeCounts = {};
         parsed.forEach(p => { typeCounts[p.type] = (typeCounts[p.type] || 0) + 1; });
         const types = ["hospital", "clinic", "police", "fire"];
         const hasEnough = types.every(t => (typeCounts[t] || 0) >= 10);
-
         if (hasEnough || radiusM === 50000) break;
-        // Otherwise expand radius
       } catch (err) {
         console.error("Overpass error:", err);
         if (radiusM === 50000) break;
@@ -341,12 +406,15 @@ const mapInstanceRef = useRef(null);
       { enableHighAccuracy: true, timeout: 15000 }
     );
 
-    // Watch position — updates blue dot dynamically
     watchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setLocation(loc);
         locationRef.current = loc;
+        // Update heading from GPS course if available
+        if (pos.coords.heading != null && !isNaN(pos.coords.heading)) {
+          setHeading(pos.coords.heading);
+        }
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
@@ -357,18 +425,20 @@ const mapInstanceRef = useRef(null);
     };
   }, [fetchServices]);
 
+  // ===== COMPASS HEADING (device orientation) =====
   useEffect(() => {
-  const handleOrientation = (e) => {
-    const h = e.webkitCompassHeading ?? (e.alpha != null ? 360 - e.alpha : 0);
-    setHeading(h);
-  };
-  window.addEventListener("deviceorientationabsolute", handleOrientation, true);
-  window.addEventListener("deviceorientation", handleOrientation, true);
-  return () => {
-    window.removeEventListener("deviceorientationabsolute", handleOrientation, true);
-    window.removeEventListener("deviceorientation", handleOrientation, true);
-  };
-}, []);
+    const handleOrientation = (e) => {
+      const h = e.webkitCompassHeading ?? (e.alpha != null ? 360 - e.alpha : null);
+      if (h != null) setHeading(h);
+    };
+    window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+    window.addEventListener("deviceorientation", handleOrientation, true);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", handleOrientation, true);
+      window.removeEventListener("deviceorientation", handleOrientation, true);
+    };
+  }, []);
+
   // ===== ROUTE with OSRM =====
   const getRoute = async (service) => {
     const loc = locationRef.current || location;
@@ -377,6 +447,8 @@ const mapInstanceRef = useRef(null);
     setRoutingTo(service.id);
     setSelectedService(service);
     setRoute(null);
+    setCurrentSegment(null);
+    setNextTurn(null);
     try {
       const url =
         `https://router.project-osrm.org/route/v1/driving/` +
@@ -398,7 +470,6 @@ const mapInstanceRef = useRef(null);
   // ===== UPDATE ROUTE when user moves =====
   useEffect(() => {
     if (!route || !selectedService || !location) return;
-    // Silently update route origin as user moves
     const update = async () => {
       try {
         const url =
@@ -420,6 +491,9 @@ const mapInstanceRef = useRef(null);
     setRoute(null);
     setRoutingTo(null);
     setSelectedService(null);
+    setCurrentSegment(null);
+    setNextTurn(null);
+    setRouteBearing(0);
   };
 
   const openNavigation = (service) => {
@@ -429,6 +503,18 @@ const mapInstanceRef = useRef(null);
       : `https://www.google.com/maps/dir//${service.lat},${service.lng}/`;
     window.open(url, "_blank");
   };
+
+  // Arrow heading: when on a route, show route bearing; otherwise show compass
+  const arrowHeading = route && currentSegment != null ? routeBearing : heading;
+
+  // Distance to next turn point
+  const distToTurn = route && currentSegment != null && location
+    ? parseFloat(calcDistance(
+        location.lat, location.lng,
+        route[Math.min(currentSegment + 1, route.length - 1)][0],
+        route[Math.min(currentSegment + 1, route.length - 1)][1],
+      ))
+    : null;
 
   const filtered = filter === "all" ? services : services.filter(s => s.type === filter);
   const markersToShow = routingTo ? services.filter(s => s.id === routingTo) : filtered;
@@ -449,16 +535,10 @@ const mapInstanceRef = useRef(null);
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={styles.serviceName}>{s.name}</p>
-            {s.address ? (
-              <p style={styles.serviceAddress}>📍 {s.address}</p>
-            ) : null}
+            {s.address && <p style={styles.serviceAddress}>📍 {s.address}</p>}
             <div style={styles.serviceMeta}>
-              <span style={{ ...styles.metaBadge, background: colors.bg, color: colors.text }}>
-                📏 {s.distance}
-              </span>
-              <span style={{ ...styles.metaBadge, background: "#f9fafb", color: "#374151" }}>
-                ⏱️ {s.time}
-              </span>
+              <span style={{ ...styles.metaBadge, background: colors.bg, color: colors.text }}>📏 {s.distance}</span>
+              <span style={{ ...styles.metaBadge, background: "#f9fafb", color: "#374151" }}>⏱️ {s.time}</span>
               {s.opening_hours && (
                 <span style={{ ...styles.metaBadge, background: "#fefce8", color: "#d97706" }}>
                   🕐 {s.opening_hours.slice(0, 20)}
@@ -467,12 +547,9 @@ const mapInstanceRef = useRef(null);
             </div>
           </div>
         </div>
-
         <div style={styles.serviceBtns}>
-          <a
-            href={"tel:" + s.phone}
-            style={{ ...styles.callBtn, background: colors.bg, borderColor: colors.border, color: colors.text }}
-          >
+          <a href={"tel:" + s.phone}
+            style={{ ...styles.callBtn, background: colors.bg, borderColor: colors.border, color: colors.text }}>
             📞 {s.phone}
           </a>
           <button
@@ -484,13 +561,10 @@ const mapInstanceRef = useRef(null);
               color: isRouting ? "#fff" : "#ff2d2d",
               borderColor: "#ff2d2d",
               opacity: routeLoading && !isRouting ? 0.5 : 1,
-            }}
-          >
+            }}>
             {isRouting ? "✕ Clear" : routeLoading && routingTo === s.id ? "⏳" : "🗺️ Route"}
           </button>
-          <button onClick={() => openNavigation(s)} style={styles.navBtn}>
-            🧭 Navigate
-          </button>
+          <button onClick={() => openNavigation(s)} style={styles.navBtn}>🧭 Navigate</button>
         </div>
       </div>
     );
@@ -500,25 +574,22 @@ const mapInstanceRef = useRef(null);
 
   return (
     <div style={styles.container}>
-    {/* ===== NEAREST BAR ===== */}
+
+      {/* ===== NEAREST BAR ===== */}
       {services.length > 0 && (() => {
         const nearestTypes = [
-          { key: "hospital", label: "🏥 Hospital",  color: "#10b981" },
-          { key: "child",    label: "👶 Child",     color: "#f43f5e" },
-          { key: "clinic",   label: "🏨 Clinic",    color: "#8b5cf6" },
-          { key: "police",   label: "🚓 Police",    color: "#3b82f6" },
-          { key: "fire",     label: "🚒 Fire",      color: "#f97316" },
+          { key: "hospital", label: "🏥 Hospital", color: "#10b981" },
+          { key: "child",    label: "👶 Child",    color: "#f43f5e" },
+          { key: "clinic",   label: "🏨 Clinic",   color: "#8b5cf6" },
+          { key: "police",   label: "🚓 Police",   color: "#3b82f6" },
+          { key: "fire",     label: "🚒 Fire",     color: "#f97316" },
         ];
         return (
           <div style={{ marginBottom: "1.2rem" }}>
-            <p style={{ fontWeight: "800", color: "#374151", fontSize: "0.95rem", marginBottom: "0.7rem" }}>
-              ⚡ Nearest to You
-            </p>
+            <p style={{ fontWeight: "800", color: "#374151", fontSize: "0.95rem", marginBottom: "0.7rem" }}>⚡ Nearest to You</p>
             <div style={{ display: "flex", gap: "0.7rem", overflowX: "auto", paddingBottom: "6px" }}>
               {nearestTypes.map(nt => {
-                const nearest = [...services]
-                  .filter(s => s.type === nt.key)
-                  .sort((a, b) => a.distNum - b.distNum)[0];
+                const nearest = [...services].filter(s => s.type === nt.key).sort((a, b) => a.distNum - b.distNum)[0];
                 if (!nearest) return null;
                 return (
                   <button key={nt.key}
@@ -533,29 +604,14 @@ const mapInstanceRef = useRef(null);
                     <div style={{
                       width: "38px", height: "38px", borderRadius: "10px",
                       background: nt.color + "18", display: "flex",
-                      alignItems: "center", justifyContent: "center",
-                      fontSize: "1.3rem", flexShrink: 0,
-                    }}>
-                      {nt.label.split(" ")[0]}
-                    </div>
+                      alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0,
+                    }}>{nt.label.split(" ")[0]}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: "0.7rem", fontWeight: "800",
-                        color: nt.color, textTransform: "uppercase", letterSpacing: "0.4px" }}>
-                        {nt.label}
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: "700", color: "#111",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {nearest.name}
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.74rem", color: nt.color, fontWeight: "600" }}>
-                        📏 {nearest.distance}
-                      </p>
+                      <p style={{ margin: 0, fontSize: "0.7rem", fontWeight: "800", color: nt.color, textTransform: "uppercase", letterSpacing: "0.4px" }}>{nt.label}</p>
+                      <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: "700", color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nearest.name}</p>
+                      <p style={{ margin: 0, fontSize: "0.74rem", color: nt.color, fontWeight: "600" }}>📏 {nearest.distance}</p>
                     </div>
-                    <span style={{
-                      background: nt.color, color: "#fff", width: "24px", height: "24px",
-                      borderRadius: "50%", display: "flex", alignItems: "center",
-                      justifyContent: "center", fontWeight: "700", fontSize: "0.85rem", flexShrink: 0,
-                    }}>→</span>
+                    <span style={{ background: nt.color, color: "#fff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "0.85rem", flexShrink: 0 }}>→</span>
                   </button>
                 );
               })}
@@ -564,35 +620,32 @@ const mapInstanceRef = useRef(null);
         );
       })()}
 
-
-   {/* ===== HEADER ===== */}
-<div style={styles.header}>
-  <div>
-    <h2 style={styles.title}>🗺️ Nearby Emergency Services</h2>
-    <p style={styles.subtitle}>
-      Real-time emergency services near you
-      {location && <span style={styles.liveTag}>🟢 GPS Active</span>}
-      {radiusUsed && !fetchingServices && (
-        <span style={styles.radiusTag}>📡 {radiusUsed}km radius</span>
-      )}
-    </p>
-  </div>
-  <div style={{ display: "flex", gap: "0.6rem", flexShrink: 0 }}>
-    <button
-      onClick={() => setShouldRecentre(true)}
-      style={{ ...styles.refreshBtn, background: "linear-gradient(135deg,#3b82f6,#1d4ed8)" }}
-    >
-      🎯 Re-centre
-    </button>
-    <button
-      onClick={() => { if (location) fetchServices(location.lat, location.lng); }}
-      disabled={fetchingServices}
-      style={styles.refreshBtn}
-    >
-      {fetchingServices ? "⏳ Loading..." : "🔄 Refresh"}
-    </button>
-  </div>
-</div>
+      {/* ===== HEADER ===== */}
+      <div style={styles.header}>
+        <div>
+          <h2 style={styles.title}>🗺️ Nearby Emergency Services</h2>
+          <p style={styles.subtitle}>
+            Real-time emergency services near you
+            {location && <span style={styles.liveTag}>🟢 GPS Active</span>}
+            {radiusUsed && !fetchingServices && <span style={styles.radiusTag}>📡 {radiusUsed}km radius</span>}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "0.6rem", flexShrink: 0 }}>
+          <button
+            onClick={() => setShouldRecentre(true)}
+            style={{ ...styles.refreshBtn, background: "linear-gradient(135deg,#3b82f6,#1d4ed8)" }}
+          >
+            🎯 Re-centre
+          </button>
+          <button
+            onClick={() => { if (location) fetchServices(location.lat, location.lng); }}
+            disabled={fetchingServices}
+            style={styles.refreshBtn}
+          >
+            {fetchingServices ? "⏳ Loading..." : "🔄 Refresh"}
+          </button>
+        </div>
+      </div>
 
       {/* ===== ROUTE BANNER ===== */}
       {route && selectedService && (
@@ -602,20 +655,32 @@ const mapInstanceRef = useRef(null);
               🗺️ Routing to: {selectedService.name}
             </p>
             <p style={{ color: "#6b7280", fontSize: "0.8rem", margin: "3px 0 0" }}>
-              📏 {selectedService.distance} • ⏱️ {selectedService.time} •
-              <span style={{ color: "#16a34a" }}> Route auto-updates as you move</span>
+              📏 {selectedService.distance} • ⏱️ {selectedService.time}
+              {route && currentSegment != null && (
+                <span style={{ color: "#2563eb", marginLeft: "8px" }}>
+                  • Heading: {Math.round(routeBearing)}°
+                  {nextTurn && nextTurn.type !== "straight" && (
+                    <span style={{ color: nextTurn.type === "right" ? "#f97316" : "#8b5cf6", marginLeft: "6px" }}>
+                      • {nextTurn.type === "right" ? "↱" : "↰"} Turn {nextTurn.type} {distToTurn < 0.05 ? "now" : `in ${Math.round(distToTurn * 1000)}m`}
+                    </span>
+                  )}
+                </span>
+              )}
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-            <button onClick={() => openNavigation(selectedService)} style={styles.startNavBtn}>
-              🧭 Navigate
-            </button>
+            <button onClick={() => openNavigation(selectedService)} style={styles.startNavBtn}>🧭 Navigate</button>
             <button onClick={clearRoute} style={styles.clearRouteBtn}>✕</button>
           </div>
         </div>
       )}
 
       {/* ===== MAP ===== */}
+      {/* 
+        IMPORTANT: The map wrapper has NO CSS rotation applied.
+        The map is always fixed North-up. Only the user arrow icon rotates.
+        Do NOT add transform:rotate() or any rotation to this div or the MapContainer.
+      */}
       <div style={styles.mapWrapper}>
         {loadingGPS ? (
           <div style={styles.mapLoading}>
@@ -629,45 +694,55 @@ const mapInstanceRef = useRef(null);
             zoom={15}
             style={{ height: "100%", width: "100%" }}
             zoomControl={true}
+            // NO rotation, NO transform applied to map at any time
           >
-            {/* High detail map tiles */}
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               maxZoom={20}
             />
 
-<UserLocationUpdater
-  location={location}
-  shouldRecentre={shouldRecentre}
-  onRecentred={() => setShouldRecentre(false)}
-  navigationActive={!!route}
-/>
-<MapRotator heading={heading} active={!!route} />
+            {/* Re-centres ONLY on button click — never auto re-centres */}
+            <UserLocationUpdater
+              location={location}
+              shouldRecentre={shouldRecentre}
+              onRecentred={() => setShouldRecentre(false)}
+            />
 
+            {/* Route polyline */}
             {route && <RouteLayer route={route} />}
 
-            {/* ===== USER LOCATION — moves dynamically ===== */}
+            {/* Turn banner overlaid on map */}
+            {route && nextTurn && distToTurn != null && (
+              <div style={{ position: "absolute", top: 0, left: 0, zIndex: 1000, pointerEvents: "none" }}>
+                <TurnBanner turn={nextTurn} distToTurn={distToTurn} />
+              </div>
+            )}
+
+            {/* ===== USER LOCATION MARKER — arrow rotates, map stays fixed ===== */}
             <Marker
-  position={[location.lat, location.lng]}
-  icon={createUserArrowIcon(route ? 0 : heading)}
-  zIndexOffset={1000}
->
+              position={[location.lat, location.lng]}
+              icon={createUserArrowIcon(arrowHeading)}
+              zIndexOffset={1000}
+            >
               <Popup>
                 <div style={{ fontFamily: "sans-serif", textAlign: "center" }}>
                   <strong>📍 Your Live Location</strong><br />
                   <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
                     {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+                  </span><br />
+                  <span style={{ fontSize: "0.75rem", color: "#3b82f6" }}>
+                    Heading: {Math.round(arrowHeading)}°
                   </span>
                 </div>
               </Popup>
             </Marker>
 
-            {/* Accuracy circle */}
+            {/* Accuracy circle around user */}
             <Circle
               center={[location.lat, location.lng]}
-              radius={100}
-              pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.12, weight: 2 }}
+              radius={80}
+              pathOptions={{ color: "#2563eb", fillColor: "#2563eb", fillOpacity: 0.1, weight: 1.5, dashArray: "4, 4" }}
             />
 
             {/* ===== SERVICE MARKERS ===== */}
@@ -682,51 +757,25 @@ const mapInstanceRef = useRef(null);
                     <div style={{ fontWeight: "800", fontSize: "0.95rem", color: "#111", marginBottom: "4px" }}>
                       {getEmoji(s.type)} {s.name}
                     </div>
-                    {s.address && (
-                      <div style={{ color: "#6b7280", fontSize: "0.78rem", marginBottom: "6px" }}>
-                        📍 {s.address}
-                      </div>
-                    )}
-                    <div style={{ color: "#6b7280", fontSize: "0.8rem", marginBottom: "10px" }}>
-                      📏 {s.distance} • ⏱️ {s.time}
-                    </div>
-                    {s.opening_hours && (
-                      <div style={{ color: "#d97706", fontSize: "0.78rem", marginBottom: "8px" }}>
-                        🕐 {s.opening_hours}
-                      </div>
-                    )}
-                    <a
-                      href={"tel:" + s.phone}
-                      style={{
-                        display: "block", background: "#f0fdf4", color: "#16a34a",
-                        fontWeight: "700", padding: "8px", borderRadius: "8px",
-                        textAlign: "center", marginBottom: "6px", textDecoration: "none",
-                      }}
-                    >
-                      📞 Call {s.phone}
-                    </a>
-                    <button
-                      onClick={() => getRoute(s)}
-                      style={{
-                        display: "block", width: "100%", background: "#fff5f5",
-                        color: "#ff2d2d", fontWeight: "700", padding: "8px",
-                        borderRadius: "8px", border: "1px solid #fecaca",
-                        cursor: "pointer", marginBottom: "6px", fontSize: "0.85rem",
-                      }}
-                    >
-                      🗺️ Show Route
-                    </button>
-                    <button
-                      onClick={() => openNavigation(s)}
-                      style={{
-                        display: "block", width: "100%", background: "#16a34a",
-                        color: "#fff", fontWeight: "700", padding: "8px",
-                        borderRadius: "8px", border: "none",
-                        cursor: "pointer", fontSize: "0.85rem",
-                      }}
-                    >
-                      🧭 Open in Google Maps
-                    </button>
+                    {s.address && <div style={{ color: "#6b7280", fontSize: "0.78rem", marginBottom: "6px" }}>📍 {s.address}</div>}
+                    <div style={{ color: "#6b7280", fontSize: "0.8rem", marginBottom: "10px" }}>📏 {s.distance} • ⏱️ {s.time}</div>
+                    {s.opening_hours && <div style={{ color: "#d97706", fontSize: "0.78rem", marginBottom: "8px" }}>🕐 {s.opening_hours}</div>}
+                    <a href={"tel:" + s.phone} style={{
+                      display: "block", background: "#f0fdf4", color: "#16a34a",
+                      fontWeight: "700", padding: "8px", borderRadius: "8px",
+                      textAlign: "center", marginBottom: "6px", textDecoration: "none",
+                    }}>📞 Call {s.phone}</a>
+                    <button onClick={() => getRoute(s)} style={{
+                      display: "block", width: "100%", background: "#eff6ff",
+                      color: "#2563eb", fontWeight: "700", padding: "8px",
+                      borderRadius: "8px", border: "1px solid #bfdbfe",
+                      cursor: "pointer", marginBottom: "6px", fontSize: "0.85rem",
+                    }}>🗺️ Show Route</button>
+                    <button onClick={() => openNavigation(s)} style={{
+                      display: "block", width: "100%", background: "#16a34a",
+                      color: "#fff", fontWeight: "700", padding: "8px",
+                      borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "0.85rem",
+                    }}>🧭 Open in Google Maps</button>
                   </div>
                 </Popup>
               </Marker>
@@ -747,16 +796,12 @@ const mapInstanceRef = useRef(null);
             const count = f.key === "all" ? services.length : totalByType(f.key);
             const active = filter === f.key;
             return (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                style={{
-                  ...styles.filterBtn,
-                  background: active ? f.color : "#fff",
-                  borderColor: f.color,
-                  color: active ? "#fff" : f.color,
-                }}
-              >
+              <button key={f.key} onClick={() => setFilter(f.key)} style={{
+                ...styles.filterBtn,
+                background: active ? f.color : "#fff",
+                borderColor: f.color,
+                color: active ? "#fff" : f.color,
+              }}>
                 {f.label}
                 <span style={{
                   marginLeft: "5px", fontSize: "0.72rem", fontWeight: "800",
@@ -769,7 +814,6 @@ const mapInstanceRef = useRef(null);
             );
           })}
         </div>
-
         {fetchingServices && (
           <div style={styles.fetchingBar}>
             <div style={styles.fetchingDot} />
@@ -782,9 +826,7 @@ const mapInstanceRef = useRef(null);
       {!fetchingServices && services.length === 0 && !loadingGPS && (
         <div style={styles.noResults}>
           <p style={{ fontSize: "1.2rem" }}>😔 No services found</p>
-          <p style={{ color: "#9ca3af", fontSize: "0.9rem" }}>
-            Try clicking Refresh or check your internet connection
-          </p>
+          <p style={{ color: "#9ca3af", fontSize: "0.9rem" }}>Try clicking Refresh or check your internet connection</p>
         </div>
       )}
 
@@ -799,14 +841,8 @@ const mapInstanceRef = useRef(null);
                 background: sec.bg, borderLeft: "4px solid " + sec.color,
                 borderRadius: "12px", padding: "0.8rem 1.2rem", marginBottom: "1rem",
               }}>
-                <h3 style={{ color: sec.color, fontWeight: "800", fontSize: "1.05rem", margin: 0 }}>
-                  {sec.label}
-                </h3>
-                <span style={{
-                  background: sec.color, color: "#fff",
-                  padding: "3px 14px", borderRadius: "50px",
-                  fontSize: "0.78rem", fontWeight: "700",
-                }}>
+                <h3 style={{ color: sec.color, fontWeight: "800", fontSize: "1.05rem", margin: 0 }}>{sec.label}</h3>
+                <span style={{ background: sec.color, color: "#fff", padding: "3px 14px", borderRadius: "50px", fontSize: "0.78rem", fontWeight: "700" }}>
                   {list.length} found
                 </span>
               </div>
@@ -827,23 +863,15 @@ const mapInstanceRef = useRef(null);
                 background: sec.bg, borderLeft: "4px solid " + sec.color,
                 borderRadius: "12px", padding: "0.8rem 1.2rem", marginBottom: "1rem",
               }}>
-                <h3 style={{ color: sec.color, fontWeight: "800", fontSize: "1.05rem", margin: 0 }}>
-                  {sec.label}
-                </h3>
-                <span style={{
-                  background: sec.color, color: "#fff",
-                  padding: "3px 14px", borderRadius: "50px",
-                  fontSize: "0.78rem", fontWeight: "700",
-                }}>
+                <h3 style={{ color: sec.color, fontWeight: "800", fontSize: "1.05rem", margin: 0 }}>{sec.label}</h3>
+                <span style={{ background: sec.color, color: "#fff", padding: "3px 14px", borderRadius: "50px", fontSize: "0.78rem", fontWeight: "700" }}>
                   {filtered.length} found
                 </span>
               </div>
               {filtered.length === 0 && !fetchingServices ? (
                 <div style={styles.noResults}>
                   <p>😔 No {sec.label} found nearby</p>
-                  <p style={{ color: "#9ca3af", fontSize: "0.85rem" }}>
-                    Click Refresh to search a wider area
-                  </p>
+                  <p style={{ color: "#9ca3af", fontSize: "0.85rem" }}>Click Refresh to search a wider area</p>
                 </div>
               ) : (
                 <div style={styles.servicesGrid}>
@@ -857,14 +885,10 @@ const mapInstanceRef = useRef(null);
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         .leaflet-container { border-radius: 16px; }
         .leaflet-popup-content { margin: 10px 14px; }
         .leaflet-popup-content-wrapper { border-radius: 14px; }
-        input[type='range'] { accent-color: #ff2d2d; }
       `}</style>
     </div>
   );
@@ -884,10 +908,7 @@ const styles = {
     alignItems: "flex-start", marginBottom: "1rem",
     flexWrap: "wrap", gap: "0.8rem",
   },
-  title: {
-    fontSize: "clamp(1.3rem, 4vw, 1.8rem)",
-    fontWeight: "bold", color: "#212121", margin: 0,
-  },
+  title: { fontSize: "clamp(1.3rem, 4vw, 1.8rem)", fontWeight: "bold", color: "#212121", margin: 0 },
   subtitle: {
     color: "#6b7280", marginTop: "4px", fontSize: "0.88rem",
     display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
@@ -906,29 +927,27 @@ const styles = {
     padding: "10px 20px", fontWeight: "700", fontSize: "0.88rem",
     cursor: "pointer", flexShrink: 0, boxShadow: "0 3px 12px rgba(255,45,45,0.3)",
   },
-
   routeBanner: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    background: "#fff5f5", border: "1px solid #fecaca",
+    background: "#eff6ff", border: "1px solid #bfdbfe",
     borderRadius: "12px", padding: "12px 16px",
     marginBottom: "0.8rem", flexWrap: "wrap", gap: "0.5rem",
   },
   startNavBtn: {
     background: "#16a34a", color: "#fff", border: "none",
-    padding: "9px 18px", borderRadius: "8px",
-    fontWeight: "700", fontSize: "0.88rem", cursor: "pointer",
+    padding: "9px 18px", borderRadius: "8px", fontWeight: "700", fontSize: "0.88rem", cursor: "pointer",
   },
   clearRouteBtn: {
     background: "#ff2d2d", color: "#fff", border: "none",
-    padding: "9px 14px", borderRadius: "8px", cursor: "pointer",
-    fontWeight: "700", fontSize: "1rem",
+    padding: "9px 14px", borderRadius: "8px", cursor: "pointer", fontWeight: "700", fontSize: "1rem",
   },
-
   mapWrapper: {
     height: "clamp(320px, 50vw, 520px)",
     borderRadius: "16px", overflow: "hidden",
     border: "1px solid #e8ecf0", marginBottom: "1.2rem",
     boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
+    position: "relative",
+    // NO transform/rotation here — map is always north-up
   },
   mapLoading: {
     height: "100%", display: "flex", flexDirection: "column",
@@ -937,18 +956,15 @@ const styles = {
   },
   spinner: {
     width: "44px", height: "44px", borderRadius: "50%",
-    border: "4px solid #e8ecf0", borderTop: "4px solid #ff2d2d",
+    border: "4px solid #e8ecf0", borderTop: "4px solid #2563eb",
     animation: "spin 0.9s linear infinite",
   },
-
   filtersBox: {
     background: "#fff", border: "1px solid #e8ecf0",
     borderRadius: "14px", padding: "1rem 1.2rem",
     marginBottom: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
   },
-  filtersRow: {
-    display: "flex", gap: "0.5rem", flexWrap: "wrap",
-  },
+  filtersRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
   filterBtn: {
     padding: "8px 14px", borderRadius: "50px", border: "2px solid",
     fontSize: "0.82rem", fontWeight: "700", cursor: "pointer",
@@ -961,9 +977,8 @@ const styles = {
   },
   fetchingDot: {
     width: "8px", height: "8px", borderRadius: "50%",
-    background: "#ff2d2d", animation: "pulse 1s infinite", flexShrink: 0,
+    background: "#2563eb", animation: "pulse 1s infinite", flexShrink: 0,
   },
-
   servicesGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))",
@@ -980,10 +995,7 @@ const styles = {
     width: "46px", height: "46px", borderRadius: "12px",
     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  serviceName: {
-    color: "#111", fontWeight: "700", fontSize: "0.9rem",
-    lineHeight: 1.4, margin: 0,
-  },
+  serviceName: { color: "#111", fontWeight: "700", fontSize: "0.9rem", lineHeight: 1.4, margin: 0 },
   serviceAddress: {
     color: "#9ca3af", fontSize: "0.75rem", margin: "3px 0 0",
     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -997,8 +1009,7 @@ const styles = {
   callBtn: {
     flex: 1, border: "1px solid", padding: "9px 6px", borderRadius: "10px",
     textAlign: "center", fontSize: "0.78rem", fontWeight: "700",
-    textDecoration: "none", display: "flex",
-    alignItems: "center", justifyContent: "center", minWidth: "70px",
+    textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", minWidth: "70px",
   },
   routeBtn: {
     flex: 1, border: "1px solid", padding: "9px 6px", borderRadius: "10px",
@@ -1010,10 +1021,7 @@ const styles = {
     fontSize: "0.78rem", fontWeight: "700", cursor: "pointer", minWidth: "70px",
     boxShadow: "0 3px 10px rgba(22,163,74,0.2)",
   },
-  noResults: {
-    textAlign: "center", padding: "3rem 2rem",
-    color: "#6b7280", fontWeight: "500",
-  },
+  noResults: { textAlign: "center", padding: "3rem 2rem", color: "#6b7280", fontWeight: "500" },
 };
 
 export default MapPage;
