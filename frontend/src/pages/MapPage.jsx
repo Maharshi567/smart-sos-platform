@@ -20,11 +20,23 @@ const createIcon = (emoji, size = 30) =>
     iconAnchor: [size / 2, size],
   });
 
-const userIcon = L.divIcon({
-  html: `<div style="width:20px;height:20px;background:#3b82f6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(59,130,246,0.3)"></div>`,
+// DELETE the old userIcon const and replace with:
+const createUserArrowIcon = (headingDeg) => L.divIcon({
+  html: `
+    <div style="
+      width:32px; height:32px;
+      display:flex; align-items:center; justify-content:center;
+      transform:rotate(${headingDeg}deg);
+      transition:transform 0.3s ease;
+    ">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <polygon points="14,2 22,24 14,19 6,24" fill="#3b82f6" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  `,
   className: "",
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
 });
 
 // ===== HELPERS =====
@@ -49,18 +61,26 @@ const calcTime = (distKm) => {
 
 // ===== MAP HELPERS =====
 // Smoothly pan map to user location without resetting zoom
-const UserLocationUpdater = ({ location }) => {
+const UserLocationUpdater = ({ location, shouldRecentre, onRecentred }) => {
   const map = useMap();
   const firstRun = useRef(true);
+
+
+  // Only set view on FIRST load
   useEffect(() => {
-    if (!location) return;
-    if (firstRun.current) {
-      map.setView([location.lat, location.lng], 15);
-      firstRun.current = false;
-    } else {
-      map.panTo([location.lat, location.lng], { animate: true, duration: 1 });
-    }
+    if (!location || !firstRun.current) return;
+    map.setView([location.lat, location.lng], 15);
+    firstRun.current = false;
   }, [location, map]);
+
+  // Recentre ONLY when button clicked
+  useEffect(() => {
+    if (shouldRecentre && location) {
+      map.setView([location.lat, location.lng], 15, { animate: true, duration: 0.8 });
+      onRecentred();
+    }
+  }, [shouldRecentre, location, map, onRecentred]);
+
   return null;
 };
 
@@ -78,7 +98,23 @@ const RouteLayer = ({ route }) => {
     />
   ) : null;
 };
-
+const MapRotator = ({ heading }) => {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    // Rotate map to face heading direction
+    container.style.transform = `rotate(${-heading}deg)`;
+    container.style.transformOrigin = "center center";
+    container.style.transition = "transform 0.3s ease";
+    // Counter-rotate controls so they stay upright
+    const controls = container.querySelectorAll(".leaflet-control-container");
+    controls.forEach(c => {
+      c.style.transform = `rotate(${heading}deg)`;
+      c.style.transformOrigin = "center center";
+    });
+  }, [heading, map]);
+  return null;
+};
 // ===== OVERPASS QUERY BUILDER =====
 const buildQuery = (lat, lng, radiusM) => `
   [out:json][timeout:120];
@@ -181,7 +217,9 @@ const MapPage = () => {
   const [routeLoading, setRouteLoading] = useState(false);
   const watchRef = useRef(null);
   const locationRef = useRef(null);
-
+const [heading, setHeading] = useState(0);
+const [shouldRecentre, setShouldRecentre] = useState(false);
+const mapInstanceRef = useRef(null);
   const filters = [
     { key: "all",      label: "🔍 All",             color: "#e94560" },
     { key: "hospital", label: "🏥 Hospitals",        color: "#10b981" },
@@ -304,6 +342,18 @@ const MapPage = () => {
     };
   }, [fetchServices]);
 
+  useEffect(() => {
+  const handleOrientation = (e) => {
+    const h = e.webkitCompassHeading ?? (e.alpha != null ? 360 - e.alpha : 0);
+    setHeading(h);
+  };
+  window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+  window.addEventListener("deviceorientation", handleOrientation, true);
+  return () => {
+    window.removeEventListener("deviceorientationabsolute", handleOrientation, true);
+    window.removeEventListener("deviceorientation", handleOrientation, true);
+  };
+}, []);
   // ===== ROUTE with OSRM =====
   const getRoute = async (service) => {
     const loc = locationRef.current || location;
@@ -500,26 +550,34 @@ const MapPage = () => {
       })()}
 
 
-      {/* ===== HEADER ===== */}
-      <div style={styles.header}>
-        <div>
-          <h2 style={styles.title}>🗺️ Nearby Emergency Services</h2>
-          <p style={styles.subtitle}>
-            Real-time emergency services near you
-            {location && <span style={styles.liveTag}>🟢 GPS Active</span>}
-            {radiusUsed && !fetchingServices && (
-              <span style={styles.radiusTag}>📡 {radiusUsed}km radius</span>
-            )}
-          </p>
-        </div>
-        <button
-          onClick={() => { if (location) fetchServices(location.lat, location.lng); }}
-          disabled={fetchingServices}
-          style={styles.refreshBtn}
-        >
-          {fetchingServices ? "⏳ Loading..." : "🔄 Refresh"}
-        </button>
-      </div>
+   {/* ===== HEADER ===== */}
+<div style={styles.header}>
+  <div>
+    <h2 style={styles.title}>🗺️ Nearby Emergency Services</h2>
+    <p style={styles.subtitle}>
+      Real-time emergency services near you
+      {location && <span style={styles.liveTag}>🟢 GPS Active</span>}
+      {radiusUsed && !fetchingServices && (
+        <span style={styles.radiusTag}>📡 {radiusUsed}km radius</span>
+      )}
+    </p>
+  </div>
+  <div style={{ display: "flex", gap: "0.6rem", flexShrink: 0 }}>
+    <button
+      onClick={() => setShouldRecentre(true)}
+      style={{ ...styles.refreshBtn, background: "linear-gradient(135deg,#3b82f6,#1d4ed8)" }}
+    >
+      🎯 Re-centre
+    </button>
+    <button
+      onClick={() => { if (location) fetchServices(location.lat, location.lng); }}
+      disabled={fetchingServices}
+      style={styles.refreshBtn}
+    >
+      {fetchingServices ? "⏳ Loading..." : "🔄 Refresh"}
+    </button>
+  </div>
+</div>
 
       {/* ===== ROUTE BANNER ===== */}
       {route && selectedService && (
@@ -564,11 +622,20 @@ const MapPage = () => {
               maxZoom={20}
             />
 
-            <UserLocationUpdater location={location} />
+            <UserLocationUpdater
+  location={location}
+  shouldRecentre={shouldRecentre}
+  onRecentred={() => setShouldRecentre(false)}
+/>
+<MapRotator heading={heading} />
             {route && <RouteLayer route={route} />}
 
             {/* ===== USER LOCATION — moves dynamically ===== */}
-            <Marker position={[location.lat, location.lng]} icon={userIcon} zIndexOffset={1000}>
+            <Marker
+  position={[location.lat, location.lng]}
+  icon={createUserArrowIcon(heading)}
+  zIndexOffset={1000}
+>
               <Popup>
                 <div style={{ fontFamily: "sans-serif", textAlign: "center" }}>
                   <strong>📍 Your Live Location</strong><br />
