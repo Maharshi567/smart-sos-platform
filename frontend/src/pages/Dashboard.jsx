@@ -176,11 +176,11 @@ const Dashboard = () => {
                   if (phone.length === 10) phone = "91" + phone;
                   setTimeout(() => {
                     const waWindow = window.open(
-                      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+                      `whatsapp://send?phone=${phone}&text=${encodeURIComponent(message)}`,
                       "_blank",
                     );
                     if (waWindow) openedAny = true;
-                  }, index * 800); // shorter delay, 800ms
+                  }, index * 800);
                 }
               });
 
@@ -545,7 +545,7 @@ const Dashboard = () => {
               if (phone.length === 10) phone = "91" + phone;
               setTimeout(() => {
                 const w = window.open(
-                  `https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`,
+                  `whatsapp://send?phone=${phone}&text=${encodeURIComponent(waMsg)}`,
                   "_blank",
                 );
                 if (w) openedAny = true;
@@ -661,7 +661,7 @@ const Dashboard = () => {
       `🔗 ${shareLink}\n\n` +
       `⏰ Still active for: ${fmtShareTime(shareTimeLeft)}\n\n` +
       `_Via SmartSOS Safety App_`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+    window.open(`whatsapp://send?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
   useEffect(() => {

@@ -187,7 +187,43 @@ const Landing = () => {
           )}
         </div>
       </nav>
-
+      {/* ===== BUILT BY BANNER ===== */}
+<div style={{
+  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+  padding: "clamp(0.8rem, 2vw, 1.2rem) clamp(1rem, 4vw, 3rem)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "0.8rem",
+  flexWrap: "wrap",
+  textAlign: "center",
+}}>
+  <span style={{
+    color: "#94a3b8",
+    fontSize: "clamp(0.8rem, 2vw, 1rem)",
+    fontWeight: "500",
+    letterSpacing: "0.05em",
+  }}>⚡ Built by</span>
+  <span style={{
+    fontSize: "clamp(1.1rem, 3vw, 1.6rem)",
+    fontWeight: "900",
+    background: "linear-gradient(135deg, #ff2d2d, #f97316, #ff2d2d)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+    letterSpacing: "0.02em",
+  }}>Maharshi Danidhariya</span>
+  <span style={{
+    background: "rgba(255,45,45,0.15)",
+    border: "1px solid rgba(255,45,45,0.3)",
+    color: "#ff6b6b",
+    padding: "3px 12px",
+    borderRadius: "50px",
+    fontSize: "clamp(0.7rem, 1.5vw, 0.8rem)",
+    fontWeight: "700",
+    letterSpacing: "0.05em",
+  }}>🚀 Full Stack Developer</span>
+</div>
       {/* ===== HERO SECTION ===== */}
       <section style={styles.hero}>
         <div style={styles.heroLeft}>

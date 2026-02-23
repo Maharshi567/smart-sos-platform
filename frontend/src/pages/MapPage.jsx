@@ -61,25 +61,37 @@ const calcTime = (distKm) => {
 
 // ===== MAP HELPERS =====
 // Smoothly pan map to user location without resetting zoom
-const UserLocationUpdater = ({ location, shouldRecentre, onRecentred }) => {
+const UserLocationUpdater = ({ location, shouldRecentre, onRecentred, navigationActive }) => {
   const map = useMap();
   const firstRun = useRef(true);
+  const userPannedRef = useRef(false);
 
+  useEffect(() => {
+    const onDrag = () => { userPannedRef.current = true; };
+    map.on("dragstart", onDrag);
+    return () => map.off("dragstart", onDrag);
+  }, [map]);
 
-  // Only set view on FIRST load
   useEffect(() => {
     if (!location || !firstRun.current) return;
     map.setView([location.lat, location.lng], 15);
     firstRun.current = false;
   }, [location, map]);
 
-  // Recentre ONLY when button clicked
+  // Auto-follow ONLY during navigation
+  useEffect(() => {
+    if (!navigationActive || !location || userPannedRef.current) return;
+    map.setView([location.lat, location.lng], 17, { animate: true, duration: 0.5 });
+  }, [location, navigationActive, map]);
+
+  // Re-centre re-enables auto-follow
   useEffect(() => {
     if (shouldRecentre && location) {
-      map.setView([location.lat, location.lng], 15, { animate: true, duration: 0.8 });
+      userPannedRef.current = false;
+      map.setView([location.lat, location.lng], navigationActive ? 17 : 15, { animate: true, duration: 0.8 });
       onRecentred();
     }
-  }, [shouldRecentre, location, map, onRecentred]);
+  }, [shouldRecentre, location, map, onRecentred, navigationActive]);
 
   return null;
 };
@@ -87,9 +99,12 @@ const UserLocationUpdater = ({ location, shouldRecentre, onRecentred }) => {
 // Fit route on map
 const RouteLayer = ({ route }) => {
   const map = useMap();
+  const fittedRef = useRef(false);
   useEffect(() => {
-    if (route?.length > 0)
+    if (route?.length > 0 && !fittedRef.current) {
       map.fitBounds(L.latLngBounds(route), { padding: [70, 70], animate: true });
+      fittedRef.current = true;
+    }
   }, [route, map]);
   return route ? (
     <Polyline
@@ -98,21 +113,21 @@ const RouteLayer = ({ route }) => {
     />
   ) : null;
 };
-const MapRotator = ({ heading }) => {
+// ADD THIS ENTIRE BLOCK after RouteLayer component (around line 84):
+const MapRotator = ({ heading, active }) => {
   const map = useMap();
   useEffect(() => {
     const container = map.getContainer();
-    // Rotate map to face heading direction
-    container.style.transform = `rotate(${-heading}deg)`;
+    const angle = active ? -heading : 0;
+    container.style.transform = `rotate(${angle}deg)`;
     container.style.transformOrigin = "center center";
     container.style.transition = "transform 0.3s ease";
-    // Counter-rotate controls so they stay upright
     const controls = container.querySelectorAll(".leaflet-control-container");
     controls.forEach(c => {
-      c.style.transform = `rotate(${heading}deg)`;
+      c.style.transform = `rotate(${active ? heading : 0}deg)`;
       c.style.transformOrigin = "center center";
     });
-  }, [heading, map]);
+  }, [heading, active, map]);
   return null;
 };
 // ===== OVERPASS QUERY BUILDER =====
@@ -622,18 +637,20 @@ const mapInstanceRef = useRef(null);
               maxZoom={20}
             />
 
-            <UserLocationUpdater
+<UserLocationUpdater
   location={location}
   shouldRecentre={shouldRecentre}
   onRecentred={() => setShouldRecentre(false)}
+  navigationActive={!!route}
 />
-<MapRotator heading={heading} />
+<MapRotator heading={heading} active={!!route} />
+
             {route && <RouteLayer route={route} />}
 
             {/* ===== USER LOCATION — moves dynamically ===== */}
             <Marker
   position={[location.lat, location.lng]}
-  icon={createUserArrowIcon(heading)}
+  icon={createUserArrowIcon(route ? 0 : heading)}
   zIndexOffset={1000}
 >
               <Popup>
