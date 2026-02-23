@@ -55,7 +55,7 @@ const TrackPage = () => {
   // ── Fetch location from backend ──
   const fetchLocation = async () => {
     try {
-      const res  = await fetch(`/api/tracking/${id}`);
+      const res = await fetch(`https://smart-sos-platform.onrender.com/api/tracking/${id}`);
       const data = await res.json();
 
       if (res.status === 404 || res.status === 410) {
