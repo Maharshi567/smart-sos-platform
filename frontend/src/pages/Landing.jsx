@@ -629,7 +629,7 @@ const Landing = () => {
             {
               icon: "👮",
               title: "Police Help",
-              desc: "Direct one tap call to police (100). Audio recording starts automatically as evidence during any crime or threat.",
+              desc: "Direct one tap call to police (100). Get nearby police stations with live map.",
               color: "#faf5ff",
               border: "#e9d5ff",
               text: "#7c3aed",
