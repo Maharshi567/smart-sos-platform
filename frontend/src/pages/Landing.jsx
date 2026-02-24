@@ -94,7 +94,7 @@ const Landing = () => {
 },
 {
   name: "Rajesh Kumar",
-  role: "Shop Owner, Lucknow",
+  role: "Student, Lucknow",
   image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop",
   story: "There was a sudden heart attack in my shop. A customer collapsed. I used SmartSOS to locate the nearest hospital and called 108. The app showed me CPR steps while waiting. The doctors said those initial minutes made all the difference.",
   emergency: "❤️ Cardiac Arrest",
@@ -116,7 +116,7 @@ const Landing = () => {
       step: "02",
       title: "Add Trusted Contacts",
       desc: "Add your family and friends who will receive instant SOS alerts with your location",
-      img: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=300&h=200&fit=crop",
+      img: "https://images.unsplash.com/photo-1491438590914-bc09fcaaf77a?w=300&h=200&fit=crop",
     },
     {
       step: "03",
@@ -189,7 +189,8 @@ const Landing = () => {
       </nav>
       {/* ===== BUILT BY BANNER ===== */}
 <div style={{
-  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+  background: "#ffffff",
+  borderBottom: "1px solid #f0f0f0",
   padding: "clamp(0.8rem, 2vw, 1.2rem) clamp(1rem, 4vw, 3rem)",
   display: "flex",
   alignItems: "center",
@@ -199,11 +200,11 @@ const Landing = () => {
   textAlign: "center",
 }}>
   <span style={{
-    color: "#94a3b8",
+    color: "#9ca3af",
     fontSize: "clamp(0.8rem, 2vw, 1rem)",
     fontWeight: "500",
     letterSpacing: "0.05em",
-  }}>⚡ Built by</span>
+  }}>Built by</span>
   <span style={{
     fontSize: "clamp(1.1rem, 3vw, 1.6rem)",
     fontWeight: "900",
@@ -214,15 +215,15 @@ const Landing = () => {
     letterSpacing: "0.02em",
   }}>Maharshi Danidhariya</span>
   <span style={{
-    background: "rgba(255,45,45,0.15)",
-    border: "1px solid rgba(255,45,45,0.3)",
-    color: "#ff6b6b",
+    background: "#fff5f5",
+    border: "1px solid #fecaca",
+    color: "#ff2d2d",
     padding: "3px 12px",
     borderRadius: "50px",
     fontSize: "clamp(0.7rem, 1.5vw, 0.8rem)",
     fontWeight: "700",
     letterSpacing: "0.05em",
-  }}>🚀 Full Stack Developer</span>
+  }}>Full Stack Developer</span>
 </div>
       {/* ===== HERO SECTION ===== */}
       <section style={styles.hero}>
@@ -395,7 +396,7 @@ const Landing = () => {
         </div>
         <div style={styles.bannerRight}>
           <img
-            src="https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&h=280&fit=crop"
+            src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&h=280&fit=crop"
             alt="Safe women"
             style={styles.bannerImg}
           />
