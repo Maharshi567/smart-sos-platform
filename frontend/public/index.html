@@ -19,6 +19,10 @@
     <!-- PWA Support -->
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.ico" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SmartSOS" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -31,14 +35,12 @@
     <title>SmartSOS — Emergency Platform</title>
 
     <style>
-      /* Prevent white flash on load */
       body {
         background-color: #f5f7fa;
         margin: 0;
         font-family: 'Inter', sans-serif;
       }
 
-      /* Loading screen before React loads */
       #initial-loader {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
@@ -85,7 +87,6 @@
       You need to enable JavaScript to run SmartSOS Emergency Platform.
     </noscript>
 
-    <!-- Loading screen shown before React app loads -->
     <div id="initial-loader">
       <span style="font-size: 3rem;">🚨</span>
       <h1>SmartSOS</h1>
@@ -93,10 +94,8 @@
       <div class="loader-ring"></div>
     </div>
 
-    <!-- React app mounts here -->
     <div id="root"></div>
 
-    <!-- Hide loader once React loads -->
     <script>
       window.addEventListener('load', function () {
         const loader = document.getElementById('initial-loader');

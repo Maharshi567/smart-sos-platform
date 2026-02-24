@@ -1,17 +1,27 @@
 {
+  "name": "SmartSOS",
   "short_name": "SmartSOS",
-  "name": "SmartSOS Emergency Platform",
   "description": "Women Safety & Emergency Services Finder",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff2d2d",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
+    },
+    {
+      "src": "https://img.icons8.com/fluency/192/shield.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://img.icons8.com/fluency/512/shield.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#ff2d2d",
-  "background_color": "#232d45",
-  "orientation": "portrait"
+  ]
 }
