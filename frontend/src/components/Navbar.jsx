@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,10 +7,33 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstall, setShowInstall] = useState(false);
+
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    });
+    // Always show the button on all devices
+    setShowInstall(true);
+  }, []);
+
+  const handleInstall = async () => {
+    if (installPrompt) {
+      // Android Chrome — native install prompt
+      installPrompt.prompt();
+      const result = await installPrompt.userChoice;
+      if (result.outcome === 'accepted') setShowInstall(false);
+    } else {
+      // Desktop / iPhone — show manual instructions
+      alert("To install SmartSOS:\n\n📱 Android: Tap ⋮ menu → 'Add to Home Screen'\n💻 Chrome: Click ⋮ → 'Install SmartSOS'\n🌐 Edge: Click ... → 'Apps' → 'Install'\n🍎 iPhone Safari: Tap Share → 'Add to Home Screen'");
+    }
+  };
 
   const handleLogout = () => { logout(); navigate('/'); };
 
-   const navLinks = [
+  const navLinks = [
     { path: '/dashboard', label: 'Home', icon: '🏠' },
     { path: '/map', label: 'Map', icon: '🗺️' },
     { path: '/contacts', label: 'Contacts', icon: '👥' },
@@ -55,6 +78,11 @@ const Navbar = () => {
 
         {/* Right Side — Desktop */}
         <div style={styles.rightSide}>
+          {showInstall && (
+            <button onClick={handleInstall} style={styles.installBtn}>
+              📲 Install App
+            </button>
+          )}
           <div style={styles.userBadge}>
             <div style={styles.userAvatar}>
               {user?.name?.charAt(0).toUpperCase()}
@@ -108,6 +136,13 @@ const Navbar = () => {
             </Link>
           ))}
 
+          {/* Install App — Mobile */}
+          {showInstall && (
+            <button onClick={handleInstall} style={styles.mobileInstallBtn}>
+              📲 Install App
+            </button>
+          )}
+
           {/* Logout */}
           <button onClick={handleLogout} style={styles.mobileLogout}>
             🚪 Logout
@@ -156,10 +191,8 @@ const styles = {
   },
   brandName: { fontSize: '1.2rem', fontWeight: '800', color: '#ff2d2d' },
 
-  // Desktop links - hidden on mobile
   desktopLinks: {
     display: 'flex', alignItems: 'center', gap: '0.2rem',
-    '@media (max-width: 768px)': { display: 'none' }
   },
   link: {
     color: '#6b7280', padding: '8px 12px', borderRadius: '10px',
@@ -176,10 +209,15 @@ const styles = {
     background: '#ff2d2d', borderRadius: '50%'
   },
 
-  // Right side - hidden on mobile
   rightSide: {
     display: 'flex', alignItems: 'center', gap: '1rem',
-    '@media (max-width: 768px)': { display: 'none' }
+  },
+  installBtn: {
+    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+    color: '#fff', padding: '8px 16px', borderRadius: '10px',
+    fontSize: '0.82rem', fontWeight: '600', cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
+    whiteSpace: 'nowrap', border: 'none',
   },
   userBadge: { display: 'flex', alignItems: 'center', gap: '8px' },
   userAvatar: {
@@ -196,10 +234,10 @@ const styles = {
     background: 'linear-gradient(135deg, #ff2d2d, #e94560)',
     color: '#fff', padding: '8px 16px', borderRadius: '10px',
     fontSize: '0.82rem', fontWeight: '600', cursor: 'pointer',
-    boxShadow: '0 2px 8px rgba(255,45,45,0.3)', whiteSpace: 'nowrap'
+    boxShadow: '0 2px 8px rgba(255,45,45,0.3)', whiteSpace: 'nowrap',
+    border: 'none',
   },
 
-  // Hamburger - shown only on mobile
   hamburger: {
     display: 'none',
     background: 'none', border: 'none',
@@ -209,7 +247,6 @@ const styles = {
     ...(isMobile ? { display: 'flex' } : {})
   },
 
-  // Mobile menu
   mobileMenu: {
     position: 'fixed', top: '64px', left: 0, right: 0,
     background: '#ffffff', display: 'flex', flexDirection: 'column',
@@ -230,8 +267,8 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     color: '#fff', fontWeight: 'bold', fontSize: '1.1rem', flexShrink: 0
   },
-  mobileUserName: { color: '#212121', fontWeight: '700', fontSize: '0.95rem' },
-  mobileUserEmail: { color: '#6b7280', fontSize: '0.8rem', marginTop: '2px' },
+  mobileUserName: { color: '#212121', fontWeight: '700', fontSize: '0.95rem', margin: 0 },
+  mobileUserEmail: { color: '#6b7280', fontSize: '0.8rem', marginTop: '2px', margin: 0 },
   mobileLink: {
     color: '#374151', padding: '12px 16px', borderRadius: '10px',
     fontSize: '0.95rem', display: 'flex', alignItems: 'center',
@@ -243,6 +280,12 @@ const styles = {
   },
   mobileLinkIcon: { fontSize: '1.2rem', width: '24px', textAlign: 'center' },
   mobileActiveBadge: { marginLeft: 'auto', color: '#ff2d2d', fontSize: '0.6rem' },
+  mobileInstallBtn: {
+    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+    color: '#fff', padding: '14px 16px', borderRadius: '10px',
+    fontSize: '0.95rem', fontWeight: '600',
+    cursor: 'pointer', border: 'none',
+  },
   mobileLogout: {
     background: 'linear-gradient(135deg, #ff2d2d, #e94560)',
     color: '#fff', padding: '14px 16px', borderRadius: '10px',
